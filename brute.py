@@ -71,14 +71,14 @@ class Responderdb:
     
     def get_hashes(self, hashtype=Hashtype.every):
         if hashtype == Hashtype.every:
-            hashes = self.__exec("SELECT fullhash FROM responder", retdata=True)
+            hashes = self.__exec("SELECT cleartext, type, fullhash FROM responder", retdata=True)
         elif hashtype == Hashtype.cracked:
-            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext NOT IN (?,?,?)",
+            hashes = self.__exec("SELECT cleartext, type, fullhash FROM responder WHERE cleartext NOT IN (?,?,?)",
                                  ('', HASH_NOTFOUND, HASH_ERROR), retdata=True)
         elif hashtype == Hashtype.noncracked:
-            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext == ''", retdata=True)
+            hashes = self.__exec("SELECT cleartext, type, fullhash FROM responder WHERE cleartext == ''", retdata=True)
         elif hashtype == Hashtype.notfound:
-            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext IN (?,?,?)",
+            hashes = self.__exec("SELECT cleartext, type, fullhash FROM responder WHERE cleartext IN (?,?,?)",
                                  ('', HASH_NOTFOUND, HASH_ERROR), retdata=True)
         else:
             err("Wrong hashtype defined!")
@@ -86,8 +86,8 @@ class Responderdb:
         return hashes
     
     def get_hashes_with_cleartext_passwords(self):
-        hashes = self.__exec("SELECT cleartext, fullhash FROM responder WHERE cleartext != '' AND cleartext != ?",
-                                 (HASH_NOTFOUND,), retdata=True)
+        hashes = self.__exec("SELECT cleartext, fullhash FROM responder WHERE cleartext != '' AND cleartext NOT IN (?,?)",
+                                 (HASH_NOTFOUND,HASH_ERROR), retdata=True)
         return hashes
     
     def set_hash_password(self, fullhash, password):
@@ -108,6 +108,7 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
         return False
     except subprocess.TimeoutExpired:
         err("Bruteforce timeout expired!")
+        return False
 
     return proc
 
@@ -167,9 +168,15 @@ def main():
     # Get not cracked hashes
     while True:
         nchashes = rdb.get_hashes(Hashtype.noncracked)
-        for curnchashtype, curnchash in nchashes:
-            brute_type = config.HASHTYPE_NTLMv2 if curnchashtype.lower().startswith('ntlmv2')\
-                            else config.HASHTYPE_NTLMv1
+        for curcleartext, curnchashtype, curnchash in nchashes:
+            if curnchashtype.lower().startswith('ntlmv2'):
+                brute_type = config.HASHTYPE_NTLMv2
+            elif curnchashtype.lower().startswith('ntlmv1'):
+                brute_type = config.HASHTYPE_NTLMv1
+            else:
+                err("ERROR: Unknown hash type", curnchashtype)
+                rdb.set_hash_password(curnchash, HASH_ERROR)
+                continue
             err(color("Cracking"), curnchash)
             with open(config.CURRENTHASHFILE, "w") as f:
                 f.write(curnchash)
@@ -184,13 +191,14 @@ def main():
             outputstr = io.StringIO(output)
             for outline in outputstr:
                 if is_valid_hash(outline):
-                    cleartextpass = get_pass_from_fullhash(outline)
+                    cleartextpass = get_pass_from_fullhash(outline).rstrip()
                     if not cleartextpass.strip():
                         cleartextpass = 'NO PASSWORD'
                     print(color("The pass is:"), cleartextpass)
                     rdb.set_hash_password(curnchash, cleartextpass)
             if not cleartextpass:
                 rdb.set_hash_password(curnchash, HASH_NOTFOUND)
+            err("Done.")
         time.sleep(config.POLLTIME)
 
 
