@@ -81,7 +81,7 @@ class Responderdb:
             hashes = self.__exec("SELECT cleartext, type, fullhash FROM responder WHERE cleartext IN (?,?,?)",
                                  ('', HASH_NOTFOUND, HASH_ERROR), retdata=True)
         else:
-            err("Wrong hashtype defined!")
+            err(color_red("ERROR:"), "Wrong hashtype defined!")
             return
         return hashes
     
@@ -104,7 +104,7 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
         # OK for hashcat
         if e.returncode == 1 and not postcommand:
             return e.output
-        err("Error running bruteforce command! {} {}".format(str(e), e.output))
+        err(color_red("ERROR:"), "Error running bruteforce command! {} {}".format(str(e), e.output))
         return False
     except subprocess.TimeoutExpired:
         err("Bruteforce timeout expired!")
@@ -112,8 +112,17 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
 
     return proc
 
-def color(text):
+def color_green(text):
     return "\033[0;32m{}\033[0m".format(text)
+
+def color_green_bold(text):
+    return "\033[0;1;32m{}\033[0m".format(text)
+
+def color_red(text):
+    return "\033[0;31m{}\033[0m".format(text)
+
+def color_yellow(text):
+    return "\033[0;33m{}\033[0m".format(text)
 
 def is_valid_hash(text):
     return (text.count(':') > 4 and len(text) > 200)
@@ -135,7 +144,7 @@ def main():
     args = parser.parse_args()
 
     if not os.path.isfile(config.RESPONDERDB):
-        err("ERROR:", config.RESPONDERDB, "cannot be found.")
+        err(color_red("ERROR:"), config.RESPONDERDB, "cannot be found.")
         sys.exit(1)
 
     rdb = Responderdb(config.RESPONDERDB)
@@ -174,17 +183,17 @@ def main():
             elif curnchashtype.lower().startswith('ntlmv1'):
                 brute_type = config.HASHTYPE_NTLMv1
             else:
-                err("ERROR: Unknown hash type", curnchashtype)
+                err(color_red("ERROR:"), "Unknown hash type", curnchashtype)
                 rdb.set_hash_password(curnchash, HASH_ERROR)
                 continue
-            err(color("Cracking"), curnchash)
+            err(color_yellow("Cracking"), curnchash)
             with open(config.CURRENTHASHFILE, "w") as f:
                 f.write(curnchash)
             output = brute(config.COMMAND, config.COMMAND_POST, config.CURRENTHASHFILE,
                            brute_type, config.TIMEOUT)
             cleartextpass = None
             if not output:
-                err("ERROR: Can't get bruteforce output, something went wrong!")
+                err(color_red("ERROR:"), ": Can't get bruteforce output, something went wrong!")
                 rdb.set_hash_password(curnchash, HASH_ERROR)
                 continue
             output = output.decode('utf-8')
@@ -194,11 +203,11 @@ def main():
                     cleartextpass = get_pass_from_fullhash(outline).rstrip()
                     if not cleartextpass.strip():
                         cleartextpass = 'NO PASSWORD'
-                    print(color("The pass is:"), cleartextpass)
+                    print(color_green_bold("The pass is:"), cleartextpass)
                     rdb.set_hash_password(curnchash, cleartextpass)
             if not cleartextpass:
                 rdb.set_hash_password(curnchash, HASH_NOTFOUND)
-            err("Done.")
+            err(color_yellow("Done."))
         time.sleep(config.POLLTIME)
 
 
