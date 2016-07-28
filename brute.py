@@ -33,6 +33,7 @@ class Hashtype(Enum):
     every      = 4
 
 HASH_NOTFOUND="!!NOTFOUND!!"
+HASH_ERROR="!!HASHERROR!!"
 
 class Storage:
     # Dummy class to store everything
@@ -72,13 +73,13 @@ class Responderdb:
         if hashtype == Hashtype.every:
             hashes = self.__exec("SELECT fullhash FROM responder", retdata=True)
         elif hashtype == Hashtype.cracked:
-            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext != '' AND cleartext != ?",
-                                 (HASH_NOTFOUND,), retdata=True)
+            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext NOT IN (?,?,?)",
+                                 ('', HASH_NOTFOUND, HASH_ERROR), retdata=True)
         elif hashtype == Hashtype.noncracked:
             hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext == ''", retdata=True)
         elif hashtype == Hashtype.notfound:
-            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext == '' OR cleartext == ?",
-                                 (HASH_NOTFOUND,), retdata=True)
+            hashes = self.__exec("SELECT type, fullhash FROM responder WHERE cleartext IN (?,?,?)",
+                                 ('', HASH_NOTFOUND, HASH_ERROR), retdata=True)
         else:
             err("Wrong hashtype defined!")
             return
@@ -104,7 +105,7 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
         if e.returncode == 1 and not postcommand:
             return e.output
         err("Error running bruteforce command! {} {}".format(str(e), e.output))
-        return
+        return False
     except subprocess.TimeoutExpired:
         err("Bruteforce timeout expired!")
 
@@ -177,7 +178,7 @@ def main():
             cleartextpass = None
             if not output:
                 err("ERROR: Can't get bruteforce output, something went wrong!")
-
+                rdb.set_hash_password(curnchash, HASH_ERROR)
                 continue
             output = output.decode('utf-8')
             outputstr = io.StringIO(output)
