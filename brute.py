@@ -153,13 +153,13 @@ def main():
         sys.exit(0)
     elif args.clear:
         hashes = rdb.get_hashes(Hashtype.notfound)
-        for curhash in hashes:
+        for _, _, curhash in hashes:
             rdb.set_hash_password(curhash, '')
         err("Done!")
         sys.exit(0)
     elif args.clear_all:
         hashes = rdb.get_hashes(Hashtype.every)
-        for curhash in hashes:
+        for _, _, curhash in hashes:
             rdb.set_hash_password(curhash, '')
         err("Done!")
         sys.exit(0)
