@@ -125,7 +125,7 @@ def color_yellow(text):
     return "\033[0;33m{}\033[0m".format(text)
 
 def is_valid_hash(text):
-    return (text.count(':') > 4 and len(text) > 200)
+    return (text.count(':') >= 4 and len(text) >= 120)
 
 def get_pass_from_fullhash(text):
     if config.MODE == 'john':
@@ -200,8 +200,8 @@ def main():
             outputstr = io.StringIO(output)
             for outline in outputstr:
                 if is_valid_hash(outline):
-                    cleartextpass = get_pass_from_fullhash(outline).rstrip()
-                    if not cleartextpass.strip():
+                    cleartextpass = get_pass_from_fullhash(outline).rstrip("\n")
+                    if not cleartextpass:
                         cleartextpass = 'NO PASSWORD'
                     print(color_green_bold("The pass is:"), cleartextpass)
                     rdb.set_hash_password(curnchash, cleartextpass)
