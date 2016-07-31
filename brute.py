@@ -50,22 +50,32 @@ class Responderdb:
             err("Can't use Responder.db: {} {}".format(str(e), repr(e)))
 
     def __connect(self):
-        self.conn = sqlite3.connect(self.path)
-        self.c = self.conn.cursor()
+        for i in range(3):
+            try:
+                self.conn = sqlite3.connect(self.path)
+                self.c = self.conn.cursor()
+                break
+            except sqlite3.OperationalError:
+                err(color_red("ERROR:"), "Unable to open database, trying again.")
+                time.sleep(1)
 
     def __disconnect(self):
         self.conn.close()
     
     def __exec(self, query, paramtuple=tuple(), retdata=False):
-        try:
-            self.__connect()
-            self.c.execute(query, paramtuple)
-            self.conn.commit()
-
-            if retdata:
-                rdata = self.c.fetchall()
-        finally:
-            self.__disconnect()
+        for i in range(3):
+            try:
+                self.__connect()
+                self.c.execute(query, paramtuple)
+                self.conn.commit()
+                if retdata:
+                    rdata = self.c.fetchall()
+                break
+            except sqlite3.OperationalError:
+                    err(color_red("ERROR:"), "Unable to open database, trying again.")
+                    time.sleep(1)
+            finally:
+                self.__disconnect()
         if retdata:
             return rdata
     
@@ -179,12 +189,7 @@ def main():
 
     # Get not cracked hashes
     while True:
-        try:
-            nchashes = rdb.get_hashes(Hashtype.noncracked)
-        except sqlite3.OperationalError:
-            err(color_red("ERROR:"), "Unable to open database, trying again.")
-            time.sleep(config.POLLTIME)
-            continue
+        nchashes = rdb.get_hashes(Hashtype.noncracked)
         for curcleartext, curnchashtype, curnchash in nchashes:
             if curnchashtype.lower().startswith('ntlmv2'):
                 brute_type = config.HASHTYPE_NTLMv2
