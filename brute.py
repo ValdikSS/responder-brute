@@ -97,12 +97,15 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
     try:
         proc = subprocess.check_output(shlex.split(command.format(hash=inputfile, hashtype=inputtype)),
                                        timeout=timeout)
+        print(proc)
         if postcommand:
             proc = subprocess.check_output(shlex.split(postcommand.format(inputfile)),
                                            timeout=timeout)
+        print(proc)
     except subprocess.CalledProcessError as e:
         # OK for hashcat
         if e.returncode == 1 and not postcommand:
+            print(e.output)
             return e.output
         err(color_red("ERROR:"), "Error running bruteforce command! {} {}".format(str(e), e.output))
         return False
@@ -176,7 +179,12 @@ def main():
 
     # Get not cracked hashes
     while True:
-        nchashes = rdb.get_hashes(Hashtype.noncracked)
+        try:
+            nchashes = rdb.get_hashes(Hashtype.noncracked)
+        except sqlite3.OperationalError:
+            err(color_red("ERROR:"), "Unable to open database, trying again.")
+            time.sleep(config.POLLTIME)
+            continue
         for curcleartext, curnchashtype, curnchash in nchashes:
             if curnchashtype.lower().startswith('ntlmv2'):
                 brute_type = config.HASHTYPE_NTLMv2
