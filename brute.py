@@ -53,26 +53,29 @@ class Responderdb:
         for i in range(3):
             try:
                 self.conn = sqlite3.connect(self.path)
+                self.conn.text_factory = bytes
                 self.c = self.conn.cursor()
                 break
-            except sqlite3.OperationalError:
-                err(color_red("ERROR:"), "Unable to open database, trying again.")
+            except sqlite3.OperationalError as e:
+                err(color_red("ERROR:"), "Unable to open database, trying again.", e)
                 time.sleep(1)
 
     def __disconnect(self):
         self.conn.close()
     
     def __exec(self, query, paramtuple=tuple(), retdata=False):
+        rdata = None
         for i in range(3):
             try:
                 self.__connect()
-                self.c.execute(query, paramtuple)
-                self.conn.commit()
-                if retdata:
-                    rdata = self.c.fetchall()
-                break
-            except sqlite3.OperationalError:
-                    err(color_red("ERROR:"), "Unable to open database, trying again.")
+                with self.conn:
+                    self.c.execute(query, paramtuple)
+                    self.conn.commit()
+                    if retdata:
+                        rdata = self.c.fetchall()
+                    break
+            except sqlite3.OperationalError as e:
+                    err(color_red("ERROR:"), "Unable to open database, trying again.", e)
                     time.sleep(1)
             finally:
                 self.__disconnect()
@@ -107,15 +110,12 @@ def brute(command, postcommand, inputfile, inputtype, timeout):
     try:
         proc = subprocess.check_output(shlex.split(command.format(hash=inputfile, hashtype=inputtype)),
                                        timeout=timeout)
-        print(proc)
         if postcommand:
             proc = subprocess.check_output(shlex.split(postcommand.format(inputfile)),
                                            timeout=timeout)
-        print(proc)
     except subprocess.CalledProcessError as e:
         # OK for hashcat
         if e.returncode == 1 and not postcommand:
-            print(e.output)
             return e.output
         err(color_red("ERROR:"), "Error running bruteforce command! {} {}".format(str(e), e.output))
         return False
@@ -190,7 +190,13 @@ def main():
     # Get not cracked hashes
     while True:
         nchashes = rdb.get_hashes(Hashtype.noncracked)
+        if nchashes == None:
+            err(color_red("ERROR:"), "Cannot get hashes!")
+            time.sleep(config.POLLTIME)
+            continue
         for curcleartext, curnchashtype, curnchash in nchashes:
+            curnchashtype = curnchashtype.decode('utf-8', 'replace')
+            curnchash = curnchash.decode('utf-8', 'replace')
             if curnchashtype.lower().startswith('ntlmv2'):
                 brute_type = config.HASHTYPE_NTLMv2
             elif curnchashtype.lower().startswith('ntlmv1'):
